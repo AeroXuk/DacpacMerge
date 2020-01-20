@@ -2,12 +2,10 @@
 using Microsoft.SqlServer.Dac.Model;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.IO.Packaging;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace MergeEm
 {
@@ -31,10 +29,10 @@ namespace MergeEm
     class DacpacMerge
     {
 
-        private string[] _sources;
-        private TSqlModel _first;
-        private string _targetPath;
-        private TSqlModel _target;
+        private readonly string[] _sources;
+        private readonly TSqlModel _first;
+        private readonly string _targetPath;
+        private readonly TSqlModel _target;
 
         public DacpacMerge(string target, params string[] sources)
         {
@@ -53,21 +51,20 @@ namespace MergeEm
 
             foreach (var source in _sources)
             {
-                var model = getModel(source);
+                var model = GetModel(source);
                 foreach(var obj in model.GetObjects(DacQueryScopes.UserDefined))
                 {
-                    TSqlScript ast;
-                    if(obj.TryGetAst(out ast))
+                    if (obj.TryGetAst(out TSqlScript ast))
                     {
                         var name = obj.Name.ToString();
                         var info = obj.GetSourceInformation();
-                        if(info != null)
+                        if (info != null)
                         {
                             name = info.SourceName;
                         }
 
                         _target.AddOrUpdateObjects(ast, name, new TSqlObjectOptions());    //WARNING throwing away ansi nulls and quoted identifiers!
-                    }                    
+                    }
                 }
 
                 using (var package = DacPackage.Load(source))
@@ -84,14 +81,16 @@ namespace MergeEm
 
         private void WriteFinalDacpac(TSqlModel model, string preScript, string postScript)
         {
-            var metadata = new PackageMetadata();
-            metadata.Name = "dacpac";
+            var metadata = new PackageMetadata
+            {
+                Name = "dacpac"
+            };
 
             DacPackageExtensions.BuildPackage(_targetPath, model, metadata);
             AddScripts(preScript, postScript, _targetPath);
         }
 
-        TSqlModel getModel(string source)
+        TSqlModel GetModel(string source)
         {
             if (source == _sources.FirstOrDefault<string>())
             {
@@ -103,13 +102,13 @@ namespace MergeEm
 
         private void AddScripts(string pre, string post, string dacpacPath)
         {            
-            using (var package = Package.Open(_targetPath, FileMode.Open, FileAccess.ReadWrite))
+            using (var package = Package.Open(dacpacPath, FileMode.Open, FileAccess.ReadWrite))
             {
                 if (!string.IsNullOrEmpty(pre))
                 {
                     var part = package.CreatePart(new Uri("/predeploy.sql", UriKind.Relative), "text/plain");
 
-                    using (var stream = part.GetStream())
+                    using (Stream stream = part.GetStream())
                     {
                         stream.Write(Encoding.UTF8.GetBytes(pre), 0, pre.Length);
                     }
@@ -120,7 +119,7 @@ namespace MergeEm
                 {                    
                     var part = package.CreatePart(new Uri("/postdeploy.sql", UriKind.Relative), "text/plain");
 
-                    using (var stream = part.GetStream())
+                    using (Stream stream = part.GetStream())
                     {
                         stream.Write(Encoding.UTF8.GetBytes(post), 0, post.Length);
                     }
